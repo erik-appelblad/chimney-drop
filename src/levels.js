@@ -2,7 +2,7 @@ export const LEVELS = [
   {
     name: 'First Snow',
     subtitle: 'The village is just waking up to Christmas Eve.',
-    target: 600,
+    target: 500,
     presents: 9,
     speed: 19,
     houses: 20,
@@ -13,7 +13,7 @@ export const LEVELS = [
   {
     name: 'Frost & Bells',
     subtitle: 'The rooftops are deep, and the chimneys are further apart.',
-    target: 1200,
+    target: 1000,
     presents: 13,
     speed: 23,
     houses: 26,
@@ -24,7 +24,7 @@ export const LEVELS = [
   {
     name: 'Silent Night',
     subtitle: 'One last pass over the sleeping village. Make every gift count.',
-    target: 2000,
+    target: 1800,
     presents: 16,
     speed: 27,
     houses: 32,
