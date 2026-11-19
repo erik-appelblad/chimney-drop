@@ -1,9 +1,30 @@
+const MUSIC_TEMPO = 88;
+const BEAT_SECONDS = 60 / MUSIC_TEMPO;
+const BAR_SECONDS = BEAT_SECONDS * 4;
+const MUSIC_CHORDS = [
+  [196, 246.94, 293.66, 392],
+  [146.83, 185, 220, 293.66],
+  [164.81, 196, 246.94, 329.63],
+  [130.81, 164.81, 196, 261.63],
+];
+const BELL_MELODIES = [
+  [783.99, 987.77, 1174.66, 987.77, 880],
+  [739.99, 880, 1108.73, 880, 739.99],
+  [659.25, 783.99, 987.77, 1174.66, 987.77],
+  [783.99, 987.77, 1174.66, 1567.98, 1174.66],
+];
+const BELL_BEATS = [0, 0.75, 1.5, 2.25, 3];
+
 export class AudioEngine {
   constructor() {
     this.ctx = null;
     this.master = null;
+    this.musicGain = null;
     this.muted = false;
     this.started = false;
+    this.musicStarted = false;
+    this.musicNextBar = 0;
+    this.musicBar = 0;
     this.windGain = null;
     this.bellTimer = 5;
   }
@@ -16,10 +37,14 @@ export class AudioEngine {
       this.master = this.ctx.createGain();
       this.master.gain.value = this.muted ? 0 : 0.7;
       this.master.connect(this.ctx.destination);
+      this.musicGain = this.ctx.createGain();
+      this.musicGain.gain.value = 0.42;
+      this.musicGain.connect(this.master);
       this.makeWind();
     }
     if (this.ctx.state === 'suspended') this.ctx.resume();
     this.started = true;
+    this.startMusic();
   }
 
   setMuted(muted) {
@@ -55,11 +80,97 @@ export class AudioEngine {
   }
 
   update(dt) {
-    if (!this.started || this.muted || !this.ctx) return;
-    this.bellTimer -= dt;
-    if (this.bellTimer <= 0) {
-      this.bellTimer = 9 + Math.random() * 11;
-      this.jingle(0.035);
+    if (!this.started || !this.ctx) return;
+    if (!this.muted) {
+      this.bellTimer -= dt;
+      if (this.bellTimer <= 0) {
+        this.bellTimer = 9 + Math.random() * 11;
+        this.jingle(0.035);
+      }
+    }
+    this.scheduleMusic();
+  }
+
+  startMusic() {
+    if (!this.ctx || this.musicStarted) return;
+    this.musicStarted = true;
+    this.musicNextBar = this.ctx.currentTime + 0.12;
+    this.musicBar = 0;
+  }
+
+  scheduleMusic() {
+    if (!this.ctx || !this.musicStarted) return;
+    const now = this.ctx.currentTime;
+    if (this.musicNextBar < now - BAR_SECONDS) this.musicNextBar = now + 0.08;
+    while (this.musicNextBar < now + 0.45) {
+      this.scheduleMusicBar(this.musicNextBar, this.musicBar);
+      this.musicNextBar += BAR_SECONDS;
+      this.musicBar = (this.musicBar + 1) % MUSIC_CHORDS.length;
+    }
+  }
+
+  scheduleMusicBar(start, bar) {
+    const chord = MUSIC_CHORDS[bar];
+    const melody = BELL_MELODIES[bar];
+
+    chord.forEach((freq, index) => {
+      this.musicVoice(freq, start, BAR_SECONDS - 0.08, 0.018, 'triangle', 1150, 0.42, 0.48);
+      this.musicVoice(freq * 2, start, BAR_SECONDS - 0.08, 0.0045, 'sawtooth', 1800, 0.52, 0.42, index % 2 ? -4 : 4);
+    });
+
+    for (const beat of [0, 2]) {
+      for (const index of [0, 2]) {
+        this.musicVoice(
+          chord[index],
+          start + beat * BEAT_SECONDS,
+          0.78,
+          0.018,
+          'sawtooth',
+          1050,
+          0.09,
+          0.24,
+          index === 0 ? -5 : 5,
+        );
+      }
+    }
+
+    melody.forEach((freq, index) => {
+      this.musicBell(freq, start + BELL_BEATS[index] * BEAT_SECONDS);
+    });
+  }
+
+  musicVoice(freq, start, duration, gain, type, cutoff, attack, release, detune = 0) {
+    if (!this.ctx || !this.musicGain) return;
+    const osc = this.ctx.createOscillator();
+    const filter = this.ctx.createBiquadFilter();
+    const envelope = this.ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, start);
+    osc.detune.setValueAtTime(detune, start);
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(cutoff, start);
+    filter.Q.setValueAtTime(0.7, start);
+    envelope.gain.setValueAtTime(0.0001, start);
+    envelope.gain.linearRampToValueAtTime(gain, start + attack);
+    envelope.gain.setValueAtTime(gain, start + duration - release);
+    envelope.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+    osc.connect(filter).connect(envelope).connect(this.musicGain);
+    osc.start(start);
+    osc.stop(start + duration + 0.03);
+  }
+
+  musicBell(freq, start) {
+    if (!this.ctx || !this.musicGain) return;
+    for (const [ratio, gain, decay] of [[1, 0.027, 1.15], [2.76, 0.009, 0.68], [5.4, 0.0035, 0.38]]) {
+      const osc = this.ctx.createOscillator();
+      const envelope = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq * ratio, start);
+      envelope.gain.setValueAtTime(gain, start);
+      envelope.gain.exponentialRampToValueAtTime(0.0001, start + decay);
+      osc.connect(envelope).connect(this.musicGain);
+      osc.start(start);
+      osc.stop(start + decay + 0.03);
     }
   }
 
