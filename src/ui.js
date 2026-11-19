@@ -154,6 +154,7 @@ export class UI {
           <div class="control"><span class="keys"><kbd>A</kbd><kbd>D</kbd></span><span>Fine steering</span></div>
           <div class="control"><span class="keys"><kbd>R</kbd></span><span>Restart level</span></div>
           <div class="control"><span class="keys"><kbd>M</kbd><kbd>ESC</kbd></span><span>Mute / pause</span></div>
+          <div class="control"><span class="keys"><kbd>PAD</kbd></span><span>Analog/D-pad steering, face button to drop, Start to pause</span></div>
         </div>`;
 
     this.showScreen(`

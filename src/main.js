@@ -86,6 +86,10 @@ const input = {
   touchX: 0,
   touchY: 0,
   touchActive: false,
+  gamepadX: 0,
+  gamepadY: 0,
+  gamepadConnected: false,
+  gamepadPrevious: Object.create(null),
 };
 
 const tmp = {
@@ -545,6 +549,7 @@ function getSteerX() {
   let x = 0;
   if (input.keys.KeyA || input.keys.ArrowLeft) x -= 1;
   if (input.keys.KeyD || input.keys.ArrowRight) x += 1;
+  x += input.gamepadX;
   if (input.touchActive) x += input.touchX;
   else if (!ui.isTouch || input.pointerSeen) x += input.pointerX;
   return clamp(x, -1, 1);
@@ -554,6 +559,7 @@ function getSteerY() {
   let y = 0;
   if (input.keys.KeyW || input.keys.ArrowUp) y += 1;
   if (input.keys.KeyS || input.keys.ArrowDown) y -= 1;
+  y += input.gamepadY;
   if (input.touchActive) y += input.touchY;
   else if (!ui.isTouch || input.pointerSeen) y += input.pointerY;
   return clamp(y, -1, 1);
@@ -722,7 +728,7 @@ function startLevel(index) {
   ui.toast(`Level ${index + 1} · ${state.level.name}`);
   ui.showHint(ui.isTouch
     ? 'Left stick to fly · DROP to deliver · aim the golden ring at a chimney'
-    : 'Mouse to steer · Click or Space to drop · W/S altitude · R restart');
+    : 'Mouse or gamepad to steer · Click/Space or gamepad to drop · W/S altitude · R restart');
   audio.start();
   audio.jingle(0.025);
 }
@@ -902,6 +908,93 @@ ui.onAction = handleAction;
 // ---------------------------------------------------------------------------
 // Input
 // ---------------------------------------------------------------------------
+const GAMEPAD_DEADZONE = 0.14;
+
+function gamepadPressed(gamepad, index) {
+  const button = gamepad.buttons[index];
+  if (!button) return false;
+  if (typeof button === 'number') return button > 0.5;
+  return button.pressed || button.value > 0.5;
+}
+
+function updateGamepad() {
+  if (!navigator.getGamepads) return;
+
+  const pads = navigator.getGamepads();
+  let gamepad = null;
+  for (const pad of pads) {
+    if (pad?.connected) {
+      gamepad = pad;
+      break;
+    }
+  }
+
+  if (!gamepad) {
+    input.gamepadConnected = false;
+    input.gamepadX = 0;
+    input.gamepadY = 0;
+    input.gamepadPrevious = Object.create(null);
+    return;
+  }
+
+  if (!input.gamepadConnected) {
+    input.gamepadConnected = true;
+    ui.toast('Gamepad connected');
+  }
+
+  let axisX = gamepad.axes[0] || 0;
+  let axisY = gamepad.axes[1] || 0;
+  if (gamepad.axes.length < 2) {
+    axisX = gamepad.axes[2] || 0;
+    axisY = gamepad.axes[3] || 0;
+  }
+  const deadzoneAxis = (value) => {
+    if (Math.abs(value) <= GAMEPAD_DEADZONE) return 0;
+    const direction = Math.sign(value);
+    return direction * Math.min(1, (Math.abs(value) - GAMEPAD_DEADZONE) / (1 - GAMEPAD_DEADZONE));
+  };
+  axisX = deadzoneAxis(axisX);
+  axisY = deadzoneAxis(axisY);
+
+  if (gamepadPressed(gamepad, 14)) axisX = -1;
+  if (gamepadPressed(gamepad, 15)) axisX = 1;
+  if (gamepadPressed(gamepad, 12)) axisY = -1;
+  if (gamepadPressed(gamepad, 13)) axisY = 1;
+  input.gamepadX = axisX;
+  input.gamepadY = -axisY;
+
+  const key = (index) => `${gamepad.index}:${index}`;
+  const edgePressed = (index) => {
+    const id = key(index);
+    const pressed = gamepadPressed(gamepad, index);
+    const edge = pressed && !input.gamepadPrevious[id];
+    input.gamepadPrevious[id] = pressed;
+    return edge;
+  };
+
+  let dropPressed = false;
+  for (const index of [0, 1, 2, 3, 4, 5, 6, 7]) {
+    dropPressed = edgePressed(index) || dropPressed;
+  }
+  if (dropPressed) {
+    if (state.mode === 'playing') dropPresent();
+    else if (state.mode === 'menu') startRun();
+    else if (state.mode === 'paused') resumeGame();
+    else if (state.mode === 'levelComplete') handleAction(state.levelIndex + 1 < LEVELS.length ? 'next' : 'menu');
+    else if (state.mode === 'gameover') handleAction('retry');
+    else if (state.mode === 'victory') handleAction('menu');
+  }
+
+  const pausePressed = edgePressed(9);
+  const backPressed = edgePressed(8);
+  if (pausePressed || backPressed) {
+    if (state.mode === 'playing') pauseGame();
+    else if (state.mode === 'paused') resumeGame();
+  }
+  if (edgePressed(10) && state.mode !== 'ending') handleAction('restart');
+  if (edgePressed(11)) toggleMute();
+}
+
 function updatePointer(event) {
   input.pointerSeen = true;
   const nx = (event.clientX / window.innerWidth) * 2 - 1;
@@ -1020,6 +1113,7 @@ function frame() {
   lastFrameTime = now;
   elapsed += dt;
   state.dropCooldown = Math.max(0, state.dropCooldown - dt);
+  updateGamepad();
 
   if (state.mode === 'menu') {
     updateMenuCamera();
