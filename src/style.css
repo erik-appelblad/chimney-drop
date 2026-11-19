@@ -353,11 +353,11 @@ body.touch[data-mode="playing"] #touch { display: block; }
 }
 .card .eyebrow { font-size: 10.5px; letter-spacing: 0.2em; color: var(--gold); }
 .card h1 {
-  margin: 8px 0 6px;
+  margin: 8px 0 14px;
   font-family: var(--font-display);
   font-weight: 700;
   font-size: clamp(38px, 7vw, 66px);
-  line-height: 0.98;
+  line-height: 1.12;
   letter-spacing: 0.015em;
   background: linear-gradient(180deg, #fff8e8 8%, #ffd88c 52%, #e8a23b 100%);
   -webkit-background-clip: text;

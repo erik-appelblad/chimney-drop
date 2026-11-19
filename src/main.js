@@ -37,7 +37,9 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(56, window.innerWidth / window.innerHeight, 0.5, 2400);
 let lastFrameTime = performance.now();
 
-const audio = new AudioEngine();
+const audio = new AudioEngine(
+  `${import.meta.env.BASE_URL}audio/bfcmusic-christmas-background-music-631630.mp3`,
+);
 const ui = new UI(audio);
 let sparkles = null;
 let world = null;
@@ -729,11 +731,13 @@ function startLevel(index) {
   ui.showHint(ui.isTouch
     ? 'Left stick to fly · DROP to deliver · aim the golden ring at a chimney'
     : 'Mouse or gamepad to steer · Click/Space or gamepad to drop · W/S altitude · R restart');
+  audio.setMusicScene('level');
   audio.start();
   audio.jingle(0.025);
 }
 
 function prepareMenu() {
+  audio.setMusicScene('title');
   state.mode = 'menu';
   state.levelIndex = 0;
   state.level = LEVELS[0];
@@ -908,6 +912,16 @@ ui.onAction = handleAction;
 // ---------------------------------------------------------------------------
 // Input
 // ---------------------------------------------------------------------------
+function unlockAudio() {
+  if (!audio.started) {
+    audio.start();
+    if (state.mode === 'menu') audio.setMusicScene('title');
+  }
+}
+
+window.addEventListener('pointerdown', unlockAudio, { once: true });
+window.addEventListener('keydown', unlockAudio, { once: true });
+
 const GAMEPAD_DEADZONE = 0.14;
 
 function gamepadPressed(gamepad, index) {
@@ -1118,6 +1132,7 @@ function frame() {
   if (state.mode === 'menu') {
     updateMenuCamera();
     sleigh.update(dt, 1);
+    audio.update(dt);
   } else if (state.mode === 'playing') {
     updateFlight(dt);
     updateCamera(dt);

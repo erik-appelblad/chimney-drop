@@ -44,6 +44,6 @@ The present simulation lives in `main.js`: a present is integrated with gravity,
 - DOM lookups rely on the IDs in `index.html`; changes to controls or HUD elements must update both `index.html` and `src/ui.js`.
 - Input handling includes mouse/keyboard, coarse-pointer touch detection, and a touch stick. Steering is normalized by `getSteerX()`/`getSteerY()` before flight-state updates.
 - Generic USB/Bluetooth controllers use the browser Gamepad API. `updateGamepad()` supports left-stick/right-stick fallback, D-pad steering, face/shoulder/trigger drop edges, Start/Back pause behavior, stick-click restart, and right-stick-click mute. Keep new controller actions in edge-detected form so held buttons do not repeat.
-- Browser audio must be initialized by a user action. `AudioEngine.start()` creates/resumes the `AudioContext`; effects and the scheduled procedural holiday music (strings, brass-like voices, and bells) are implemented in `src/audio.js` and share the existing mute control.
+- Browser audio must be initialized by a user action. `AudioEngine.start()` creates/resumes the `AudioContext`; the title score is scheduled procedurally, while level music is the looping MP3 in `public/audio/`. `setMusicScene()` switches between them, and both follow the existing mute control.
 - Texture loading is two-tiered: loaded PNG assets are preferred, while `World` and `textures.js` provide generated fallbacks if loading fails.
 - Dev-only diagnostics live behind `import.meta.env.DEV`; do not add user-facing debugging behavior outside that guard.

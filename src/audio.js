@@ -16,12 +16,15 @@ const BELL_MELODIES = [
 const BELL_BEATS = [0, 0.75, 1.5, 2.25, 3];
 
 export class AudioEngine {
-  constructor() {
+  constructor(levelMusicUrl) {
     this.ctx = null;
     this.master = null;
     this.musicGain = null;
     this.muted = false;
     this.started = false;
+    this.levelMusicUrl = levelMusicUrl;
+    this.levelMusic = null;
+    this.musicScene = 'title';
     this.musicStarted = false;
     this.musicNextBar = 0;
     this.musicBar = 0;
@@ -45,6 +48,7 @@ export class AudioEngine {
     if (this.ctx.state === 'suspended') this.ctx.resume();
     this.started = true;
     this.startMusic();
+    if (this.musicScene === 'level') this.playLevelMusic();
   }
 
   setMuted(muted) {
@@ -52,6 +56,7 @@ export class AudioEngine {
     if (this.master) {
       this.master.gain.setTargetAtTime(muted ? 0 : 0.7, this.ctx.currentTime, 0.04);
     }
+    if (this.levelMusic) this.levelMusic.muted = muted;
   }
 
   makeWind() {
@@ -81,14 +86,59 @@ export class AudioEngine {
 
   update(dt) {
     if (!this.started || !this.ctx) return;
-    if (!this.muted) {
+    if (this.musicScene === 'level' && !this.muted) {
       this.bellTimer -= dt;
       if (this.bellTimer <= 0) {
         this.bellTimer = 9 + Math.random() * 11;
         this.jingle(0.035);
       }
     }
-    this.scheduleMusic();
+    if (this.musicScene === 'title') this.scheduleMusic();
+  }
+
+  setMusicScene(scene) {
+    if (scene !== 'title' && scene !== 'level') return;
+    if (this.musicScene === scene) {
+      if (scene === 'level' && this.started) this.playLevelMusic();
+      return;
+    }
+
+    this.musicScene = scene;
+    if (scene === 'title') {
+      if (this.levelMusic) {
+        this.levelMusic.pause();
+        this.levelMusic.currentTime = 0;
+      }
+      if (this.ctx && this.musicGain) {
+        this.musicGain.gain.setTargetAtTime(0.42, this.ctx.currentTime, 0.35);
+        this.musicNextBar = this.ctx.currentTime + 0.12;
+        this.musicBar = 0;
+      }
+      this.startMusic();
+      return;
+    }
+
+    if (this.ctx && this.musicGain) {
+      this.musicGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.25);
+    }
+    if (this.started) this.playLevelMusic();
+  }
+
+  playLevelMusic() {
+    if (!this.levelMusic && this.levelMusicUrl) {
+      this.levelMusic = new Audio(this.levelMusicUrl);
+      this.levelMusic.loop = true;
+      this.levelMusic.preload = 'auto';
+      this.levelMusic.volume = 0.48;
+      this.levelMusic.addEventListener('error', () => {
+        console.error(`Could not load level music: ${this.levelMusicUrl}`);
+      });
+    }
+    if (!this.levelMusic) return;
+    this.levelMusic.muted = this.muted;
+    this.levelMusic.play().catch((error) => {
+      console.warn('Could not start level music.', error);
+    });
   }
 
   startMusic() {
@@ -99,7 +149,7 @@ export class AudioEngine {
   }
 
   scheduleMusic() {
-    if (!this.ctx || !this.musicStarted) return;
+    if (!this.ctx || !this.musicStarted || this.musicScene !== 'title') return;
     const now = this.ctx.currentTime;
     if (this.musicNextBar < now - BAR_SECONDS) this.musicNextBar = now + 0.08;
     while (this.musicNextBar < now + 0.45) {
