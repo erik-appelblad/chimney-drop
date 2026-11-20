@@ -160,7 +160,7 @@ export class UI {
     this.showScreen(`
       <div class="stars">✦ ✦ ✦</div>
       <span class="eyebrow">A Christmas Eve flight</span>
-      <h1>Sleigh Bells</h1>
+      <h1>Chimney Drop</h1>
       <p class="lede">Santa's sack is full and the village is asleep. Fly low over the rooftops, line up the golden marker, and drop presents straight down the chimneys. Every hit lights up a house — and builds your streak.</p>
       <div class="level-strip">${levelChips(0, 0)}</div>
       <button class="btn primary" data-action="start">Begin the run</button>

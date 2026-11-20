@@ -87,6 +87,13 @@ export class World {
     scene.fog = new THREE.FogExp2(0x0c1a33, 0.004);
     scene.background = new THREE.Color(0x050a16);
 
+    this.snowSpeedFactor = 1;
+    this.snowDriftFactor = 1;
+    this.snowActive = 0;
+    this.moonGlowOpacity = 0.32;
+    this.shootMin = 16;
+    this.shootMax = 38;
+
     this.createLights();
     this.createSky();
     this.createSnow();
@@ -133,6 +140,11 @@ export class World {
         uTop: { value: new THREE.Color(0x03060f) },
         uMid: { value: new THREE.Color(0x08142b) },
         uHorizon: { value: new THREE.Color(0x142743) },
+        uAuroraColor: { value: new THREE.Color(0x1d6b63) },
+        uAuroraStrength: { value: 0.45 },
+        uHorizonGlowColor: { value: new THREE.Color(0x1a2f4f) },
+        uHorizonGlowStrength: { value: 0.06 },
+        uTime: { value: 0 },
       },
       vertexShader: /* glsl */ `
         varying vec3 vWorld;
@@ -147,6 +159,11 @@ export class World {
         uniform vec3 uTop;
         uniform vec3 uMid;
         uniform vec3 uHorizon;
+        uniform vec3 uAuroraColor;
+        uniform float uAuroraStrength;
+        uniform vec3 uHorizonGlowColor;
+        uniform float uHorizonGlowStrength;
+        uniform float uTime;
         float hash(vec2 p) {
           return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
         }
@@ -155,16 +172,26 @@ export class World {
           float h = clamp(dir.y, 0.0, 1.0);
           vec3 col = mix(uHorizon, uMid, smoothstep(0.0, 0.28, h));
           col = mix(col, uTop, smoothstep(0.28, 1.0, h));
-          // A faint cold aurora band low on the northern sky.
-          float band = smoothstep(0.04, 0.14, h) * smoothstep(0.34, 0.12, h);
-          float wave = 0.5 + 0.5 * sin(dir.x * 7.0 + dir.z * 4.0);
-          col += vec3(0.02, 0.06, 0.07) * band * wave;
+
+          // A coloured afterglow hugging the horizon.
+          float low = 1.0 - smoothstep(0.0, 0.3, h);
+          float glowWave = 0.55 + 0.45 * sin(dir.x * 2.4 + dir.z * 1.7 + uTime * 0.03);
+          col += uHorizonGlowColor * low * glowWave * uHorizonGlowStrength;
+
+          // Slow aurora curtains. The strength and colour come from the level theme.
+          float band = smoothstep(0.05, 0.17, h) * (1.0 - smoothstep(0.16, 0.44, h));
+          float curtain = 0.5 + 0.5 * sin(dir.x * 8.0 + dir.z * 5.0 + uTime * 0.11);
+          float ripple = 0.5 + 0.5 * sin(dir.z * 17.0 - dir.x * 11.0 + uTime * 0.19);
+          float aurora = band * (0.32 + 0.68 * curtain) * (0.55 + 0.45 * ripple);
+          col += uAuroraColor * aurora * uAuroraStrength;
+
           // Dither to stop banding.
           col += (hash(gl_FragCoord.xy) - 0.5) * 0.004;
           gl_FragColor = vec4(col, 1.0);
         }
       `,
     });
+    this.skyMat = skyMat;
     const sky = new THREE.Mesh(skyGeo, skyMat);
     sky.frustumCulled = false;
     this.skyGroup.add(sky);
@@ -174,6 +201,8 @@ export class World {
       uniforms: {
         uTime: { value: 0 },
         uPixelRatio: { value: this.renderer.getPixelRatio() },
+        uTint: { value: new THREE.Color(0xc8d8ff) },
+        uBrightness: { value: 1 },
       },
       vertexShader: /* glsl */ `
         attribute vec3 aColor;
@@ -194,6 +223,8 @@ export class World {
       fragmentShader: /* glsl */ `
         varying vec3 vColor;
         varying float vTwinkle;
+        uniform vec3 uTint;
+        uniform float uBrightness;
         void main() {
           vec2 c = gl_PointCoord - 0.5;
           float d = length(c);
@@ -201,7 +232,7 @@ export class World {
           float glow = smoothstep(0.5, 0.05, d) * 0.24;
           float a = (pow(core, 2.0) + glow) * vTwinkle;
           if (a < 0.012) discard;
-          gl_FragColor = vec4(vColor * (1.3 + vTwinkle * 0.9), a);
+          gl_FragColor = vec4(vColor * uTint * uBrightness * (1.3 + vTwinkle * 0.9), a);
         }
       `,
       transparent: true,
@@ -249,17 +280,19 @@ export class World {
     for (let i = 0; i < (this.isMobile ? 5 : 9); i++) {
       const angle = (i / 9) * Math.PI * 2 + rng() * 0.6;
       const radius = 430 + rng() * 160;
+      const baseOpacity = 0.16 + rng() * 0.16;
       const mat = new THREE.SpriteMaterial({
         map: this.cloudTexture,
         color: 0xc2d4f5,
         transparent: true,
-        opacity: 0.16 + rng() * 0.16,
+        opacity: baseOpacity,
         depthWrite: false,
         blending: THREE.NormalBlending,
         toneMapped: false,
         fog: false,
       });
       const sprite = new THREE.Sprite(mat);
+      sprite.userData.baseOpacity = baseOpacity;
       sprite.position.set(
         Math.cos(angle) * radius,
         120 + rng() * 170,
@@ -325,9 +358,76 @@ export class World {
     this.snowPositions = positions;
   }
 
+  applyTheme(level) {
+    const theme = level.theme;
+    this.theme = theme;
+
+    if (this.scene.fog) {
+      this.scene.fog.color.setHex(theme.fogColor);
+      this.scene.fog.density = level.fog;
+    }
+    this.scene.background.setHex(theme.background);
+
+    // Sky dome and aurora.
+    const sky = this.skyMat.uniforms;
+    sky.uTop.value.setHex(theme.sky.top);
+    sky.uMid.value.setHex(theme.sky.mid);
+    sky.uHorizon.value.setHex(theme.sky.horizon);
+    sky.uAuroraColor.value.setHex(theme.sky.auroraColor);
+    sky.uAuroraStrength.value = theme.sky.auroraStrength;
+    sky.uHorizonGlowColor.value.setHex(theme.sky.horizonGlowColor);
+    sky.uHorizonGlowStrength.value = theme.sky.horizonGlowStrength;
+    this.starMat.uniforms.uTint.value.setHex(theme.stars.tint);
+    this.starMat.uniforms.uBrightness.value = theme.stars.brightness;
+
+    // Lights.
+    const lights = theme.lights;
+    this.hemi.color.setHex(lights.hemiSky);
+    this.hemi.groundColor.setHex(lights.hemiGround);
+    this.hemi.intensity = lights.hemi;
+    this.ambient.color.setHex(lights.ambient);
+    this.ambient.intensity = lights.ambientIntensity;
+    this.moonLight.color.setHex(lights.moon);
+    this.moonLight.intensity = lights.moonIntensity;
+    this.fill.color.setHex(lights.fill);
+    this.fill.intensity = lights.fillIntensity;
+
+    // Moon and its halo.
+    this.moonDir.set(theme.moon.dir[0], theme.moon.dir[1], theme.moon.dir[2]).normalize();
+    const moonPos = this.moonDir.clone().multiplyScalar(720);
+    this.moon.position.copy(moonPos);
+    this.moonGlow.position.copy(moonPos);
+    this.moon.material.color.setHex(theme.moon.color);
+    this.moon.scale.set(theme.moon.scale, theme.moon.scale, 1);
+    this.moonGlow.material.color.setHex(theme.moon.glowColor);
+    this.moonGlow.scale.set(theme.moon.glowScale, theme.moon.glowScale, 1);
+    this.moonGlowOpacity = theme.moon.glowOpacity;
+    this.moonGlow.material.opacity = theme.moon.glowOpacity;
+
+    // Clouds.
+    for (const sprite of this.cloudGroup.children) {
+      sprite.material.color.setHex(theme.clouds.color);
+      sprite.material.opacity = sprite.userData.baseOpacity * theme.clouds.opacity;
+    }
+
+    // Snow.
+    const snow = theme.snow;
+    this.snow.material.color.setHex(snow.color);
+    this.snow.material.size = snow.size * (this.isMobile ? 0.85 : 1);
+    this.snow.material.opacity = snow.opacity;
+    this.snowSpeedFactor = snow.speed;
+    this.snowDriftFactor = snow.drift;
+    this.snowActive = Math.max(1, Math.floor(this.snowCount * Math.min(1, snow.amount)));
+    this.snow.geometry.setDrawRange(0, this.snowActive);
+
+    this.shootMin = theme.shootInterval[0];
+    this.shootMax = theme.shootInterval[1];
+    this.shootTimer = Math.min(this.shootTimer, this.shootMin);
+  }
+
   build(level, seed) {
     this.level = level;
-    if (this.scene.fog) this.scene.fog.density = level.fog;
+    this.applyTheme(level);
     this.disposeVillage();
     this.villageState = buildVillage(this.villageRoot, level, seed, this.shared, this.isMobile);
     this.chimneys = this.villageState.chimneys;
@@ -350,8 +450,9 @@ export class World {
   update(dt, elapsed, camera, sleighPos) {
     this.skyGroup.position.copy(camera.position);
     this.starMat.uniforms.uTime.value = elapsed;
+    this.skyMat.uniforms.uTime.value = elapsed;
     this.cloudGroup.rotation.y += dt * 0.0032;
-    this.moonGlow.material.opacity = 0.24 + Math.sin(elapsed * 0.45) * 0.02;
+    this.moonGlow.material.opacity = this.moonGlowOpacity + Math.sin(elapsed * 0.45) * 0.02;
     this.updateShootingStar(dt);
 
     // Follow the sleigh with the moonlight so shadows stay near the action.
@@ -380,7 +481,7 @@ export class World {
     }
     this.shootTimer -= dt;
     if (this.shootTimer > 0) return;
-    this.shootTimer = 16 + Math.random() * 22;
+    this.shootTimer = this.shootMin + Math.random() * (this.shootMax - this.shootMin);
     const angle = Math.random() * Math.PI * 2;
     const height = 260 + Math.random() * 300;
     this.shootStart = new THREE.Vector3(
@@ -399,11 +500,12 @@ export class World {
     const cy = camera.position.y;
     const cz = camera.position.z;
     const wind = Math.sin(elapsed * 0.22) * 0.35;
-    for (let i = 0; i < this.snowCount; i++) {
+    const active = this.snowActive || this.snowCount;
+    for (let i = 0; i < active; i++) {
       const i3 = i * 3;
-      p[i3] += (this.snowDrift[i] + wind) * dt;
-      p[i3 + 1] -= this.snowSpeed[i] * dt;
-      p[i3 + 2] += this.snowDrift[i] * 0.35 * dt;
+      p[i3] += (this.snowDrift[i] * this.snowDriftFactor + wind) * dt;
+      p[i3 + 1] -= this.snowSpeed[i] * this.snowSpeedFactor * dt;
+      p[i3 + 2] += this.snowDrift[i] * this.snowDriftFactor * 0.35 * dt;
 
       let dx = p[i3] - cx;
       if (dx > 75) p[i3] -= 150;

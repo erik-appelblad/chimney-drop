@@ -128,6 +128,17 @@ function setupComposer() {
   composer.addPass(new OutputPass());
 }
 
+function applyLevelLook(level) {
+  const theme = level.theme;
+  if (!theme) return;
+  renderer.toneMappingExposure = theme.exposure;
+  if (bloomPass && theme.bloom) {
+    bloomPass.strength = theme.bloom.strength;
+    bloomPass.radius = theme.bloom.radius;
+    bloomPass.threshold = theme.bloom.threshold;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Aim marker
 // ---------------------------------------------------------------------------
@@ -355,10 +366,12 @@ function collisionAt(prev, pos, includeGround = true) {
       Math.abs(curLocal.x) < halfX &&
       Math.abs(curLocal.z) < halfZ
     ) {
-      const surface = house.h + house.roofH * Math.max(
-        0,
-        1 - Math.max(Math.abs(curLocal.x) / halfX, Math.abs(curLocal.z) / halfZ),
-      );
+      const slope = house.roofType === 'gable'
+        ? (house.ridgeAlongZ
+          ? 1 - Math.min(1, Math.abs(curLocal.x) / halfX)
+          : 1 - Math.min(1, Math.abs(curLocal.z) / halfZ))
+        : 1 - Math.min(1, Math.max(Math.abs(curLocal.x) / halfX, Math.abs(curLocal.z) / halfZ));
+      const surface = house.h + house.roofH * Math.max(0, slope);
       if (prevLocal.y > surface && curLocal.y <= surface) {
         const point = tmp.point.set(curLocal.x, surface, curLocal.z);
         house.group.localToWorld(point);
@@ -712,6 +725,7 @@ function startLevel(index) {
   state.pendingResult = null;
   clearPresents();
   world.build(state.level, state.level.seed + state.attempt * 104729);
+  applyLevelLook(state.level);
   resetFlight(state.level);
   snapCamera();
   sparkles.clear();
@@ -746,6 +760,7 @@ function prepareMenu() {
   state.runPresents = 0;
   clearPresents();
   world.build(LEVELS[0], LEVELS[0].seed);
+  applyLevelLook(LEVELS[0]);
   resetFlight(LEVELS[0]);
   flight.pos.set(36, 24, 74);
   flight.yaw = -0.28;
@@ -1200,6 +1215,10 @@ async function boot() {
   const params = new URLSearchParams(window.location.search);
   if (import.meta.env.DEV && params.has('autostart')) {
     startRun();
+    const requested = Number(params.get('level'));
+    if (Number.isFinite(requested) && requested >= 1 && requested <= LEVELS.length) {
+      startLevel(requested - 1);
+    }
   }
   if (import.meta.env.DEV) {
     window.__game = { state, flight, startRun, startLevel, dropPresent, handleAction, world, marker, aimLine, ui, audio };
