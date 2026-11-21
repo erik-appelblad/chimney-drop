@@ -18,6 +18,16 @@ const wrapAngle = (a) => {
 };
 const GRAVITY = 26;
 
+// Chase camera framing: sit behind and above the sleigh and aim slightly
+// below it, so the ground (and the drop target) stays in view when flying
+// straight and level. The wider field of view keeps the landing marker on
+// screen at normal cruising altitude.
+const CAMERA_FOV = 62;
+const CAMERA_BACK = 19;
+const CAMERA_HEIGHT = 13;
+const CAMERA_LOOK_AHEAD = 14;
+const CAMERA_LOOK_Y = -2;
+
 const isTouch = window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
 const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({
@@ -34,11 +44,11 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(56, window.innerWidth / window.innerHeight, 0.5, 2400);
+const camera = new THREE.PerspectiveCamera(CAMERA_FOV, window.innerWidth / window.innerHeight, 0.5, 2400);
 let lastFrameTime = performance.now();
 
 const audio = new AudioEngine(
-  `${import.meta.env.BASE_URL}audio/bfcmusic-christmas-background-music-631630.mp3`,
+  LEVELS.map((level) => `${import.meta.env.BASE_URL}${level.music}`),
 );
 const ui = new UI(audio);
 let sparkles = null;
@@ -606,14 +616,14 @@ function resetFlight(level) {
 }
 
 function snapCamera() {
-  const bx = Math.sin(flight.yaw) * 19;
-  const bz = Math.cos(flight.yaw) * 19;
-  camera.position.set(flight.pos.x + bx, flight.pos.y + 9.2, flight.pos.z + bz);
+  const bx = Math.sin(flight.yaw) * CAMERA_BACK;
+  const bz = Math.cos(flight.yaw) * CAMERA_BACK;
+  camera.position.set(flight.pos.x + bx, flight.pos.y + CAMERA_HEIGHT, flight.pos.z + bz);
   camera.up.set(0, 1, 0);
   camera.lookAt(
-    flight.pos.x - Math.sin(flight.yaw) * 13,
-    flight.pos.y + 1.4,
-    flight.pos.z - Math.cos(flight.yaw) * 13,
+    flight.pos.x - Math.sin(flight.yaw) * CAMERA_LOOK_AHEAD,
+    flight.pos.y + CAMERA_LOOK_Y,
+    flight.pos.z - Math.cos(flight.yaw) * CAMERA_LOOK_AHEAD,
   );
 }
 
@@ -665,17 +675,17 @@ function updateFlight(dt, neutral = false) {
 }
 
 function updateCamera(dt) {
-  const bx = Math.sin(flight.yaw) * 19;
-  const bz = Math.cos(flight.yaw) * 19;
+  const bx = Math.sin(flight.yaw) * CAMERA_BACK;
+  const bz = Math.cos(flight.yaw) * CAMERA_BACK;
   tmp.cameraDesired.set(
     flight.pos.x + bx,
-    flight.pos.y + 9.2 + flight.pitch * 2.2,
+    flight.pos.y + CAMERA_HEIGHT + flight.pitch * 2.2,
     flight.pos.z + bz,
   );
   const t = 1 - Math.exp(-dt * 4.5);
   camera.position.lerp(tmp.cameraDesired, t);
-  tmp.cameraLook.copy(flight.pos).addScaledVector(forward, 13);
-  tmp.cameraLook.y += 1.4;
+  tmp.cameraLook.copy(flight.pos).addScaledVector(forward, CAMERA_LOOK_AHEAD);
+  tmp.cameraLook.y += CAMERA_LOOK_Y;
   camera.up.set(Math.sin(-flight.roll * 0.3), 1, 0).normalize();
   camera.lookAt(tmp.cameraLook);
 
@@ -745,6 +755,7 @@ function startLevel(index) {
   ui.showHint(ui.isTouch
     ? 'Left stick to fly · DROP to deliver · aim the golden ring at a chimney'
     : 'Mouse or gamepad to steer · Click/Space or gamepad to drop · W/S altitude · R restart');
+  audio.setLevelMusic(index);
   audio.setMusicScene('level');
   audio.start();
   audio.jingle(0.025);

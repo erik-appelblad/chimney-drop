@@ -33,14 +33,14 @@ nginx (`nginx.conf`). `dist/` is not tracked.
 | --- | --- |
 | `index.html` | HUD, menus, touch controls, canvas; loads `src/main.js`. |
 | `src/main.js` | Boot, render loop, state machine, input, gameplay, cameras, post FX. |
-| `src/levels.js` | Level balance + the full per-level theme data. |
+| `src/levels.js` | Level balance, music track + the full per-level theme data. |
 | `src/world.js` | Scene-level lighting/sky/fog/moon/stars/clouds/snow; applies themes. |
 | `src/village.js` | Procedural village: materials, houses, layouts, props, delivery FX. |
 | `src/sleigh.js` | Sleigh, Santa, reindeer and animations. |
 | `src/particles.js` | Additive GPU sparkle system (trail, bursts, puffs). |
 | `src/textures.js` | Procedural canvas textures (glow, snow, smoke, windows, fallbacks). |
 | `src/ui.js` | DOM screens/HUD updates; emits actions through `ui.onAction`. |
-| `src/audio.js` | WebAudio music/wind/SFX + HTML audio level track. |
+| `src/audio.js` | WebAudio music/wind/SFX + per-level HTML audio tracks. |
 | `src/rng.js` | Seeded `mulberry32` RNG and `range` helper. |
 | `src/style.css` | All UI styling. |
 | `tools/make-sky-texture.mjs` | Optional sky texture generator. |
@@ -88,7 +88,8 @@ Level flow:
 
 ## Level themes (important)
 
-Each entry in `LEVELS` (`src/levels.js`) has balance fields plus a `theme`
+Each entry in `LEVELS` (`src/levels.js`) has balance fields, a `music` track
+path (resolved under `public/`, e.g. `audio/level1.mp3`), plus a `theme`
 object. The theme is the single source of truth for the level's look:
 
 - `fogColor`, `background`, `fog`, `exposure`
@@ -143,7 +144,8 @@ House generation (`buildHouse`):
 - `pyramid` roof (cone) or `gable` roof (custom triangular prism); gable ridge
   is randomly along X or Z.
 - Chimney placed on the roof slope; its world-space top is the gameplay target
-  (`chimney.topWorld`, `topY`, radius 2.8).
+  (`chimney.topWorld`, `topY`). Catch radius is 2.8 on desktop and 4.2 on
+  touch devices (see `CHIMNEY_RADIUS*` in `village.js`).
 - Windows/door/wreath/lantern, optional dormers, icicles, fences, second
   chimney.
 - Stores roof dimensions and type on each house for collision:
@@ -181,7 +183,10 @@ delivered stars, lamps, tree, garlands, bonfire, fairies and luminaries.
   (pyramid `max(|x|,|z|)` slope or gable ridge slope), then ground.
 - Scoring: `100 × clamp(streak, 1, 3)`; a miss resets the streak. Reaching the
   target calls `finishLevel()` (`ending` → `levelComplete`/`victory`).
-- Camera: third-person chase, lerped, with subtle roll/shake.
+- Camera: third-person chase, lerped, with subtle roll/shake. It sits 19 behind
+  and 13 above the sleigh (62° vertical FOV) and aims at a point 14 ahead and
+  2 below, so the sleigh is seen from above and the drop target stays on
+  screen when flying level (`CAMERA_*` constants in `main.js`).
 
 ## UI, input, audio
 
@@ -191,16 +196,17 @@ delivered stars, lamps, tree, garlands, bonfire, fairies and luminaries.
   steering), R/M/Esc, touch stick + drop button, gamepad (left stick/D-pad,
   face buttons to drop, Start/Back pause, shoulder restart/mute).
 - `AudioEngine` starts on first pointer/key interaction (browser autoplay
-  rules), uses WebAudio for procedural music/wind/SFX plus an HTML audio level
-  track. Mute state persists in `localStorage` as `sleigh-bells-muted`.
+  rules), uses WebAudio for procedural music/wind/SFX plus a per-level HTML
+  audio track selected from `level.music`. Mute state persists in
+  `localStorage` as `sleigh-bells-muted`.
 - Rendering: ACES tone mapping, sRGB output, shadows, bloom. Pixel ratio is
   capped at 2 on desktop and 1.6 on touch.
 
 ## Common change recipes
 
-- **New level:** add a `LEVELS` entry with balance + a complete `theme`; pick
-  `layout`, `roofStyle`, palettes, `sizes`, `pond`, and `extras`. Test all
-  extras and target reachability.
+- **New level:** add a `LEVELS` entry with balance, a `music` track path, and a
+  complete `theme`; pick `layout`, `roofStyle`, palettes, `sizes`, `pond`, and
+  `extras`. Test all extras and target reachability.
 - **New prop:** add an `extras` flag in the theme, build it in `village.js`,
   animate it in the village `update()`, and rely on group traversal for
   disposal. Reuse shared textures/materials where possible.
@@ -220,6 +226,7 @@ delivered stars, lamps, tree, garlands, bonfire, fairies and luminaries.
 - Theme objects are currently expected to be complete; `applyTheme()` reads
   fields directly without defaults.
 - Mobile detection is `(pointer: coarse)`; mobile reduces shadow map size,
-  lamp lights, snow, clouds and some detail, but not house counts.
+  lamp lights, snow, clouds and some detail, but not house counts, and widens
+  chimney catch radii.
 - Keep animated per-frame work allocation-free; the frame loop reuses `tmp`
   vectors and typed arrays.

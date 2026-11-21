@@ -16,13 +16,14 @@ const BELL_MELODIES = [
 const BELL_BEATS = [0, 0.75, 1.5, 2.25, 3];
 
 export class AudioEngine {
-  constructor(levelMusicUrl) {
+  constructor(levelMusicUrls) {
     this.ctx = null;
     this.master = null;
     this.musicGain = null;
     this.muted = false;
     this.started = false;
-    this.levelMusicUrl = levelMusicUrl;
+    this.levelMusicUrls = Array.isArray(levelMusicUrls) ? levelMusicUrls : [levelMusicUrls];
+    this.levelMusicUrl = this.levelMusicUrls[0] ?? null;
     this.levelMusic = null;
     this.musicScene = 'title';
     this.musicStarted = false;
@@ -124,19 +125,34 @@ export class AudioEngine {
     if (this.started) this.playLevelMusic();
   }
 
+  setLevelMusic(index) {
+    const url = this.levelMusicUrls[index] ?? this.levelMusicUrls[0];
+    if (!url || url === this.levelMusicUrl) return;
+    this.levelMusicUrl = url;
+    if (this.levelMusic) {
+      this.levelMusic.pause();
+      this.levelMusic.removeAttribute('src');
+      this.levelMusic.load();
+      this.levelMusic = null;
+    }
+    if (this.started && this.musicScene === 'level') this.playLevelMusic();
+  }
+
   playLevelMusic() {
     if (!this.levelMusic && this.levelMusicUrl) {
-      this.levelMusic = new Audio(this.levelMusicUrl);
+      const url = this.levelMusicUrl;
+      this.levelMusic = new Audio(url);
       this.levelMusic.loop = true;
       this.levelMusic.preload = 'auto';
       this.levelMusic.volume = 0.48;
       this.levelMusic.addEventListener('error', () => {
-        console.error(`Could not load level music: ${this.levelMusicUrl}`);
+        console.error(`Could not load level music: ${url}`);
       });
     }
     if (!this.levelMusic) return;
     this.levelMusic.muted = this.muted;
     this.levelMusic.play().catch((error) => {
+      if (error.name === 'AbortError') return; // interrupted by a track switch
       console.warn('Could not start level music.', error);
     });
   }

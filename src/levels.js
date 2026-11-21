@@ -4,6 +4,7 @@ export const LEVELS = [
   {
     name: 'First Snow',
     subtitle: 'The village is just waking up to Christmas Eve.',
+    music: 'audio/level1.mp3',
     target: 500,
     presents: 9,
     speed: 19,
@@ -101,6 +102,7 @@ export const LEVELS = [
   {
     name: 'Frost & Bells',
     subtitle: 'The rooftops are deep, and the chimneys are further apart.',
+    music: 'audio/level2.mp3',
     target: 1000,
     presents: 13,
     speed: 23,
@@ -200,6 +202,7 @@ export const LEVELS = [
   {
     name: 'Silent Night',
     subtitle: 'One last pass over the sleeping village. Make every gift count.',
+    music: 'audio/level3.mp3',
     target: 1800,
     presents: 16,
     speed: 27,

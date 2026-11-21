@@ -5,6 +5,11 @@ import { mulberry32, range } from './rng.js';
 const ROOF_SCALE = 0.86;
 const ROOF_HALF = ROOF_SCALE * Math.SQRT1_2;
 
+// Chimney catch radius. Touch steering is less precise, so phones get a
+// noticeably more forgiving hitbox (the aim marker uses the same value).
+const CHIMNEY_RADIUS = 2.8;
+const CHIMNEY_RADIUS_TOUCH = 4.2;
+
 function box(parent, w, h, d, material, x = 0, y = 0, z = 0) {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
   mesh.position.set(x, y, z);
@@ -306,7 +311,7 @@ function buildHouse(parent, opts, mats, shared, isMobile) {
     topY: topWorld.y,
     active: true,
     delivered: false,
-    radius: 2.8,
+    radius: isMobile ? CHIMNEY_RADIUS_TOUCH : CHIMNEY_RADIUS,
     capMat,
     cap,
     glow: chimneyGlow,
