@@ -1,16 +1,19 @@
 # Chimney Drop
 
-![Chimney Drop gameplay](./game.png)
+Fly Santa's sleigh over a snowy village and drop presents straight down the
+chimneys. Line up the golden aim ring, release at the right moment, and build a
+streak for up to a 3× score multiplier. Miss and the streak resets. \
+![Chimney Drop gameplay](./game.png) \
+[Play the game here](https://chimney.erikappelblad.dev)
 
 Fly Santa's sleigh over a snowy village and drop presents straight down the
 chimneys. Line up the golden aim ring, release at the right moment, and build a
 streak for up to a 3× score multiplier. Miss and the streak resets.
 
-Three levels each have their own mood, lighting, architecture, and village
-layout — from a cozy first snowfall to an icy aurora night and a quiet,
-lantern-lit Christmas Eve.
+Three levels, each with their own mood, lighting, architecture, music, and village
+layout.
 
-## Play
+## Play locally
 
 ```bash
 npm install
